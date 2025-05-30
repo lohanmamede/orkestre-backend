@@ -9,29 +9,29 @@
 
 
 services: # Define os contêineres (serviços) que vamos rodar
-  db_umamao: # Nome que estamos dando ao nosso serviço de banco de dados PostgreSQL
+  db_orkestre: # Nome que estamos dando ao nosso serviço de banco de dados PostgreSQL
     image: postgres:13-alpine  # Imagem Docker que será usada (PostgreSQL versão 13, variante Alpine que é leve)
-    container_name: umamao_postgres_db # Nome explícito para o container
+    container_name: orkestre_postgres_db # Nome explícito para o container
     restart: always # Política para reiniciar o container automaticamente se ele parar
     environment: # Variáveis de ambiente para configurar o PostgreSQL dentro do container
-      POSTGRES_USER: umamao_user       # Nome de usuário para o banco
-      POSTGRES_PASSWORD: umamao_password # SENHA para o usuário. **Use uma senha forte aqui!**
-      POSTGRES_DB: umamao_db           # Nome do banco de dados que será criado
+      POSTGRES_USER: orkestre_user       # Nome de usuário para o banco
+      POSTGRES_PASSWORD: orkestre_password # SENHA para o usuário. **Use uma senha forte aqui!**
+      POSTGRES_DB: orkestre_db           # Nome do banco de dados que será criado
     ports: # Mapeamento de portas do container para a sua máquina local
       # "porta_na_sua_maquina:porta_dentro_do_container"
       - "5432:5432" # Permite que sua aplicação backend (rodando na sua máquina) acesse o Postgres na porta 5432
     volumes: # Para persistir os dados do banco de dados, mesmo que o container pare/seja removido
-      - postgres_data_umamao:/var/lib/postgresql/data # Mapeia o volume nomeado 'postgres_data_umamao' para a pasta de dados do Postgres no container
+      - postgres_data_orkestre:/var/lib/postgresql/data # Mapeia o volume nomeado 'postgres_data_orkestre' para a pasta de dados do Postgres no container
 
-  redis_umamao: # Nome que estamos dando ao nosso serviço Redis
+  redis_orkestre: # Nome que estamos dando ao nosso serviço Redis
     image: redis:6-alpine # Imagem Docker que será usada (Redis versão 6, variante Alpine)
-    container_name: umamao_redis_cache # Nome explícito para o container
+    container_name: orkestre_redis_cache # Nome explícito para o container
     restart: always
     ports:
       - "6379:6379" # Permite que sua aplicação backend acesse o Redis na porta 6379
     volumes:
-      - redis_data_umamao:/data # Mapeia o volume nomeado 'redis_data_umamao' para a pasta de dados do Redis
+      - redis_data_orkestre:/data # Mapeia o volume nomeado 'redis_data_orkestre' para a pasta de dados do Redis
 
 volumes: # Declaração dos volumes nomeados que usamos acima
-  postgres_data_umamao: # Docker gerencia este volume para persistir os dados do Postgres
-  redis_data_umamao:    # Docker gerencia este volume para persistir os dados do Redis (se houver persistência configurada no Redis)
+  postgres_data_orkestre: # Docker gerencia este volume para persistir os dados do Postgres
+  redis_data_orkestre:    # Docker gerencia este volume para persistir os dados do Redis (se houver persistência configurada no Redis)
