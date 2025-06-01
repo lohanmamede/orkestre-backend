@@ -15,7 +15,7 @@ services: # Define os contêineres (serviços) que vamos rodar
     restart: always # Política para reiniciar o container automaticamente se ele parar
     environment: # Variáveis de ambiente para configurar o PostgreSQL dentro do container
       POSTGRES_USER: orkestre_user       # Nome de usuário para o banco
-      POSTGRES_PASSWORD: orkestre_password # SENHA para o usuário. **Use uma senha forte aqui!**
+      POSTGRES_PASSWORD: 32423r32d32ed32423423423 # SENHA para o usuário. **Use uma senha forte aqui!**
       POSTGRES_DB: orkestre_db           # Nome do banco de dados que será criado
     ports: # Mapeamento de portas do container para a sua máquina local
       # "porta_na_sua_maquina:porta_dentro_do_container"
