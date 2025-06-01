@@ -33,12 +33,15 @@ def create_user(db: Session, *, user_in: UserCreate) -> User:
     db.refresh(db_user) # Para pegar o ID gerado pelo banco e outros defaults
     return db_user
 
-# Futuramente:
-# def authenticate_user(db: Session, *, email: str, password: str) -> User | None:
-#     user = get_user_by_email(db, email=email)
-#     if not user:
-#         return None
-#     if not verify_password(password, user.hashed_password):
-#         return None
-#     return user
-
+def authenticate_user(db: Session, *, email: str, password: str) -> User | None:
+    """
+    Autentica um usuário. Retorna o usuário se as credenciais forem válidas, senão None.
+    """
+    user = get_user_by_email(db, email=email) # Reutiliza a função que já temos
+    if not user:
+        return None # Usuário não encontrado
+    if not user.is_active: # Opcional: Verificar se o usuário está ativo
+        return None # Ou poderia levantar uma exceção específica para usuário inativo
+    if not verify_password(plain_password=password, hashed_password=user.hashed_password):
+        return None # Senha incorreta
+    return user # Sucesso! Usuário e senha corretos

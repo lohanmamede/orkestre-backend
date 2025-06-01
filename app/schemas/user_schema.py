@@ -19,7 +19,8 @@ class UserInDBBase(UserBase):
     # updated_at: Optional[datetime] # Removido updated_at para simplificar o retorno inicial
 
     class Config: # Herdando de BaseModel, precisamos redefinir Config se quisermos orm_mode
-        orm_mode = True
+        # orm_mode = True # Linha antiga
+        from_attributes = True # Nova linha para Pydantic V2+
 
 # Propriedades retornadas pela API (não inclui o password)
 class User(UserInDBBase):
