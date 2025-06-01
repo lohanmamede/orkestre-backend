@@ -39,28 +39,31 @@ def register_new_user(
 # Dentro de app/api/v1/endpoints/auth_router.py, abaixo do endpoint de registro
 
 @router.post("/login", response_model=Token)
-def login_for_access_token(
-    db: Session = Depends(deps.get_db), 
-    form_data: UserLogin = Depends() # FastAPI também pode injetar dependências de schemas no corpo
-                                     # ou você pode usar: user_credentials: UserLogin
+async def login_for_access_token( # Adicionei async, é uma boa prática para I/O com banco
+    login_credentials: UserLogin, # <--- ALTERAÇÃO PRINCIPAL AQUI
+    db: Session = Depends(deps.get_db)
 ):
     """
     Autentica um usuário e retorna um token de acesso JWT.
-    Para usar com 'application/json', envie email e password no corpo do request.
+    Espera email e password no corpo da requisição JSON.
     """
     user = user_service.authenticate_user(
-        db, email=form_data.email, password=form_data.password
+        db, email=login_credentials.email, password=login_credentials.password # Use login_credentials aqui
     )
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Email ou senha incorretos",
-            headers={"WWW-Authenticate": "Bearer"}, # Padrão para erros de autenticação
+            headers={"WWW-Authenticate": "Bearer"},
         )
-
-    # Cria o token de acesso
+    
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
         subject=user.email, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
+
+# {
+#  "email": "teste1@example.com",
+#  "password": "teste1"
+# }
