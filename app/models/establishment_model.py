@@ -17,7 +17,7 @@ class Establishment(Base):
     # working_hours_config = Column(JSON, nullable=True) # Para guardar config de horários
 
     user_id = Column(Integer, ForeignKey("users.id")) # Chave estrangeira para users.id
-    # user = relationship("User", back_populates="establishment") # Relacionamento de volta para User
+    user = relationship("User", back_populates="establishment") # Relacionamento de volta para User
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)

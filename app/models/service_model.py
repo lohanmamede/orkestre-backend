@@ -21,3 +21,7 @@ class Service(Base):
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    
+    """
+    Estes relacionamentos permitirão que, por exemplo, a partir de um objeto Service, acessemos service.establishment.user_id.
+    """

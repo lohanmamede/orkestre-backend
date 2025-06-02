@@ -12,5 +12,13 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    # Relacionamento com Estabelecimento (definiremos o Establishment depois)
-    # establishment = relationship("Establishment", back_populates="user", uselist=False) # Se um user tem um estabelecimento
+    # Relacionamento com Estabelecimento
+    establishment = relationship("Establishment", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    # ... created_at, updated_at ...
+    
+    """ 
+    - establishment: Relacionamento com o modelo Establishment, onde uselist=False indica que cada usuário tem no máximo um estabelecimento associado. 
+    - cascade="all, delete-orphan" aqui significa que se o usuário for deletado, o estabelecimento associado também será
+    """
+    
+    
