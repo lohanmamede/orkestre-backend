@@ -11,6 +11,6 @@ def init_db():
     # Importar todos os modelos aqui para que sejam registrados no Base
     from app.models.user_model import User
     from app.models.establishment_model import Establishment
-    # from app.models.service_model import Service # Quando criarmos
+    from app.models.service_model import Service
 
     Base.metadata.create_all(bind=engine)
