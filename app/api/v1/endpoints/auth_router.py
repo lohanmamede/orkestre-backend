@@ -1,3 +1,4 @@
+# # Este arquivo é um router para a autenticação de usuários, incluindo registro e login.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta # Para definir um tempo de expiração customizado se necessário

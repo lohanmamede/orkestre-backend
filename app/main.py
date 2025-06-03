@@ -1,3 +1,6 @@
+# main.py
+# Este arquivo é o ponto de entrada da aplicação FastAPI.
+# Ele configura a aplicação, inicializa o banco de dados e inclui os routers da API.
 from fastapi import FastAPI
 from app.db.session import init_db # Importe a função
 from app.api.v1.api import api_router as api_v1_router

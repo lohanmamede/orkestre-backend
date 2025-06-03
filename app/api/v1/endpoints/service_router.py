@@ -1,3 +1,4 @@
+# Este arquivo é um router para serviços, ou seja, ele define endpoints relacionados a serviços de um estabelecimento.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List

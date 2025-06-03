@@ -14,7 +14,12 @@ class Establishment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
     phone_number = Column(String, nullable=True)
-    # working_hours_config = Column(JSON, nullable=True) # Para guardar config de horários
+    
+    """
+    Usamos JSON para armazenar uma estrutura de dados flexível.
+    nullable=True significa que um estabelecimento pode ser criado inicialmente sem uma configuração de horários (podemos definir um padrão na lógica da aplicação ou deixar que o usuário configure depois).
+    """
+    working_hours_config = Column(JSON, nullable=True) # Para guardar config de horários
 
     user_id = Column(Integer, ForeignKey("users.id")) # Chave estrangeira para users.id
     user = relationship("User", back_populates="establishment") # Relacionamento de volta para User

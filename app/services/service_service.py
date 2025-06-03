@@ -1,3 +1,5 @@
+# Este arquivo contém a lógica de negócios relacionada aos estabelecimentos.
+# Ele interage com o banco de dados e aplica regras de negócio específicas.
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
