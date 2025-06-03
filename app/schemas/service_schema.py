@@ -37,3 +37,21 @@ class Service(BaseSchema): # Herda de BaseSchema para ter from_attributes = True
     establishment_id: int # Para sabermos a qual estabelecimento ele pertence
     created_at: datetime
     updated_at: Optional[datetime] = None # Consistente com nossos modelos
+    
+    """
+    Explicação dos Schemas:
+
+    ServiceBase(BaseModel):
+        - Contém os campos comuns que definem um serviço: name, description, price, duration_minutes, is_active.
+        - is_active tem um valor padrão True, então se não for fornecido na criação, o serviço será ativo.
+        - Não precisa herdar de BaseSchema porque ele é usado como base para ServiceCreate, que é para entrada de dados, não leitura direta de um objeto ORM.
+    ServiceCreate(ServiceBase):
+        - Herda todos os campos de ServiceBase. É o que esperamos receber no corpo da requisição quando um profissional for cadastrar um novo serviço.
+        - Não incluímos establishment_id aqui porque geralmente o endpoint de criação de serviço já estará no contexto de um estabelecimento (ex: /establishments/{establishment_id}/services/) ou pegaremos o establishment_id do usuário logado.
+    ServiceUpdate(BaseModel):
+        - Usado para atualizar um serviço existente. Todos os campos são Optional porque o usuário pode querer atualizar apenas um ou alguns deles, não todos.
+    Service(BaseSchema):
+        - Este é o schema que nossa API usará para retornar os dados de um serviço.
+        - Ele herda de BaseSchema para que o from_attributes = True (o antigo orm_mode) seja aplicado, permitindo que ele seja preenchido diretamente a partir de um objeto Service do SQLAlchemy.
+        - Inclui todos os campos de ServiceBase mais o id do serviço, o establishment_id ao qual ele pertence, e os timestamps created_at e updated_at.
+    """
