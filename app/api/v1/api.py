@@ -1,9 +1,11 @@
 # Este arquivo é o api.py que define o router principal da API v1, incluindo os outros routers específicos como autenticação e serviços.
 from fastapi import APIRouter
 from app.api.v1.endpoints import auth_router, service_router, establishment_router, appointment_router
+from app.api.v1.endpoints import user_router
 
 api_router = APIRouter()
 api_router.include_router(auth_router.router, prefix="/auth", tags=["Auth"])
+api_router.include_router(user_router.router, prefix="/users", tags=["Users"])
 api_router.include_router(service_router.router, prefix="", tags=["Services"])
 api_router.include_router(establishment_router.router, prefix="/establishments", tags=["Establishments"]) # NOVO ROUTER
 # Ajuste o prefixo se necessário

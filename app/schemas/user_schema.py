@@ -38,6 +38,29 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     email: Optional[str] = None
 
+"""
+Novo schema para a resposta do endpoint /users/me
+Sub-schema para não expor todos os 
+detalhes do estabelecimento, apenas o id e name por enquanto (podemos ajustar depois). Ele precisa ter orm_mode = True (ou from_attributes = True, dependendo do seu BaseSchema).
+"""
+class EstablishmentForUserMe(BaseModel): # Um sub-schema simples para o estabelecimento
+    id: int
+    name: str # Podemos adicionar mais campos do estabelecimento se necessário
+
+    class Config:
+        orm_mode = True # ou from_attributes = True
+
+""" 
+Schema para o endpoint /users/me
+Este será o schema de resposta. Ele inclui os campos básicos do usuário e um campo opcional establishment do tipo EstablishmentForUserMe.
+"""
+class UserMe(BaseSchema): # Herda de BaseSchema para ter from_attributes = True
+    id: int
+    email: EmailStr
+    is_active: bool
+    created_at: datetime
+    establishment: Optional[EstablishmentForUserMe] = None # Inclui o ID e nome do estabelecimento
+
 
 
 
