@@ -12,5 +12,6 @@ def init_db():
     from app.models.user_model import User
     from app.models.establishment_model import Establishment
     from app.models.service_model import Service
+    from app.models.appointment_model import Appointment
 
     Base.metadata.create_all(bind=engine)
