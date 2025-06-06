@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 from .base_schema import BaseSchema # ou TunedModel se preferir
+from .working_hours_schema import WorkingHoursConfig
 
 # Propriedades básicas que um usuário tem (para leitura)
 class UserBase(BaseModel):
@@ -43,10 +44,10 @@ Novo schema para a resposta do endpoint /users/me
 Sub-schema para não expor todos os 
 detalhes do estabelecimento, apenas o id e name por enquanto (podemos ajustar depois). Ele precisa ter orm_mode = True (ou from_attributes = True, dependendo do seu BaseSchema).
 """
-class EstablishmentForUserMe(BaseModel): # Um sub-schema simples para o estabelecimento
+class EstablishmentForUserMe(BaseModel):
     id: int
     name: str # Podemos adicionar mais campos do estabelecimento se necessário
-
+    working_hours_config: Optional[WorkingHoursConfig] = None # Adicione
     class Config:
         orm_mode = True # ou from_attributes = True
 
