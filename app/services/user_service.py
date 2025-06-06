@@ -6,6 +6,9 @@ from passlib.context import CryptContext # Para hashear senhas
 from app.models.user_model import User # Nosso modelo SQLAlchemy User
 from app.schemas.user_schema import UserCreate # Nosso schema Pydantic para criação de usuário
 
+from app.models.establishment_model import Establishment # Importe o modelo Establishment
+from app.services import establishment_service # Se precisarmos de alguma função auxiliar dele
+
 # Configuração para o hashing de senhas
 # Colocamos isso aqui, mas em projetos maiores poderia estar em um arquivo de core/security.py
 PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -22,17 +25,32 @@ def get_user_by_email(db: Session, *, email: str) -> User | None:
     """Busca um usuário pelo email."""
     return db.query(User).filter(User.email == email).first()
 
+
 def create_user(db: Session, *, user_in: UserCreate) -> User:
-    """Cria um novo usuário."""
+    """
+    Cria um novo usuário e seu estabelecimento associado.
+    """
     hashed_password = get_password_hash(user_in.password)
+
+    # 1. Cria o objeto User
     db_user = User(
         email=user_in.email,
         hashed_password=hashed_password
-        # is_active é True por padrão no modelo
     )
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user) # Para pegar o ID gerado pelo banco e outros defaults
+    db.commit() # Faz o commit para que o ID do usuário seja gerado pelo banco
+    db.refresh(db_user) # Atualiza o objeto db_user com os dados do banco (incluindo o ID)
+
+    # 2. Cria o objeto Establishment associado
+    if user_in.establishment_name:
+        db_establishment = Establishment(
+            name=user_in.establishment_name,
+            user_id=db_user.id # Associa ao usuário recém-criado
+        )
+        db.add(db_establishment)
+        db.commit()
+        db.refresh(db_establishment)
+
     return db_user
 
 def authenticate_user(db: Session, *, email: str, password: str) -> User | None:

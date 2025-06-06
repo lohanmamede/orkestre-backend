@@ -11,6 +11,7 @@ class UserBase(BaseModel):
 # Propriedades recebidas na criação de um usuário
 class UserCreate(UserBase):
     password: str
+    establishment_name: str
 
 # Propriedades adicionais armazenadas no DB, mas não necessariamente retornadas sempre
 class UserInDBBase(UserBase):
