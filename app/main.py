@@ -23,10 +23,11 @@ origins = [
 # Configuração do CORS para permitir requisições do frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Ajuste conforme necessário para produção
+    allow_origins=["*"],  # Ajuste conforme necessário para produção  # allow_origins=["http://localhost:3000"], (ou allow_origins=["*"] se quiser permitir todas as origens)
+    # Se você quiser restringir a origens específicas, substitua o wildcard por uma lista de URLs
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["*"], # Esta linha com wildcard para headers geralmente funciona bem
 )
 
 # Chame init_db() aqui se não chamou antes, ou mantenha onde estava

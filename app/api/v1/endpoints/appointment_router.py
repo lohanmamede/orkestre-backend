@@ -129,25 +129,23 @@ def update_appointment_status_endpoint(
     Atualiza o status de um agendamento.
     Apenas o proprietário do estabelecimento pode atualizar.
     """
-    db_appointment = appointment_service.get_appointment(db, appointment_id=appointment_id, establishment_id=0) # Temporariamente 0, vamos corrigir
+    # 1. Busca o agendamento pelo ID primeiro.
+    db_appointment = appointment_service.get_appointment(db, appointment_id=appointment_id)
 
-    # Precisamos buscar o agendamento e verificar a propriedade de forma correta
-    # Reutilizando a lógica do read_specific_appointment para buscar e verificar
-    temp_appointment_for_check = db.query(AppointmentModel).filter(AppointmentModel.id == appointment_id).first()
-    if not temp_appointment_for_check:
+    if not db_appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agendamento não encontrado")
 
-    db_establishment = establishment_service.get_establishment_by_id(db, establishment_id=temp_appointment_for_check.establishment_id)
-    if not db_establishment or db_establishment.user_id != current_user.id:
+    # 2. Verifica se o estabelecimento do agendamento pertence ao usuário logado.
+    #    (Aqui usamos o relacionamento que definimos no modelo SQLAlchemy)
+    if db_appointment.establishment.user_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="Não tem permissão para modificar este agendamento"
         )
 
-    # Agora que verificamos a propriedade, podemos chamar o serviço de atualização
-    # O objeto 'temp_appointment_for_check' é o que queremos atualizar
+    # 3. Se a permissão estiver OK, chama o serviço para atualizar o status.
     updated_appointment = appointment_service.update_appointment_status(
-        db=db, appointment_db_obj=temp_appointment_for_check, status_in=status_update.status
+        db=db, appointment_db_obj=db_appointment, status_in=status_update.status
     )
     return updated_appointment
 
