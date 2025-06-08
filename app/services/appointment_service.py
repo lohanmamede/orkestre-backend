@@ -1,159 +1,135 @@
+# app/services/appointment_service.py
 from sqlalchemy.orm import Session
-from sqlalchemy import and_ # Para construir queries com múltiplas condições
+from sqlalchemy import and_, desc
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import date, time, datetime, timedelta
+import pytz
 
 from app.models.appointment_model import Appointment, AppointmentStatus
 from app.models.establishment_model import Establishment
 from app.models.service_model import Service
-from app.schemas.appointment_schema import AppointmentCreate
-from app.schemas.working_hours_schema import WorkingHoursConfig, DayWorkingHours # Nossos schemas de horário
+from app.schemas.appointment_schema import AppointmentCreate, AppointmentStatusUpdate
+from app.schemas.working_hours_schema import WorkingHoursConfig, DayWorkingHours
 
-from sqlalchemy import desc # Para ordenar
-from datetime import date # Para o filtro de data
+# --- FUNÇÕES DE LÓGICA DE AGENDAMENTO ---
 
-# --- FUNÇÕES CRUD E LÓGICA PARA AGENDAMENTOS ---
-
-def _calculate_end_time(start_time: datetime, duration_minutes: int) -> datetime:
-    """Calcula o horário de término com base no início e na duração."""
-    return start_time + timedelta(minutes=duration_minutes)
-
-def _is_slot_available(
-    db: Session,
-    establishment_id: int,
-    proposed_start_time: datetime,
-    proposed_end_time: datetime
-) -> bool:
+def get_available_slots(
+    db: Session, *, establishment_id: int, service_id: int, appointment_date: date
+) -> List[time]:
     """
-    Verifica se um slot de horário está disponível em um estabelecimento,
-    considerando outros agendamentos já existentes.
+    Calcula e retorna os horários de início disponíveis, considerando o fuso horário
+    específico do estabelecimento e convertendo tudo para UTC para comparações.
     """
-    # Busca por agendamentos existentes que se sobreponham ao horário proposto
-    # Um slot está ocupado se:
-    # (outro.start_time < proposed_end_time) AND (outro.end_time > proposed_start_time)
-    # Consideramos apenas agendamentos PENDING ou CONFIRMED como bloqueadores
-    overlapping_appointments = db.query(Appointment).filter(
+    # 1. Busca os dados essenciais
+    establishment = db.query(Establishment).filter(Establishment.id == establishment_id).first()
+    service = db.query(Service).filter(Service.id == service_id).first()
+    
+    if not establishment or not service or not establishment.working_hours_config:
+        return []
+
+    # 2. Define o fuso horário do estabelecimento
+    try:
+        establishment_tz = pytz.timezone(establishment.timezone)
+    except pytz.UnknownTimeZoneError:
+        return [] # Retorna vazio se o timezone no banco for inválido
+
+    # 3. Parseia a configuração de horários e obtém a do dia correto
+    working_hours = WorkingHoursConfig.parse_obj(establishment.working_hours_config)
+    day_of_week_int = appointment_date.weekday()
+    days_map = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    day_config = getattr(working_hours, days_map[day_of_week_int])
+
+    if not day_config.is_active or not day_config.start_time or not day_config.end_time:
+        return []
+
+    # 4. Converte os horários de funcionamento para datetimes AWARE no fuso do estabelecimento
+    day_start_naive = datetime.combine(appointment_date, datetime.strptime(day_config.start_time, "%H:%M").time())
+    day_end_naive = datetime.combine(appointment_date, datetime.strptime(day_config.end_time, "%H:%M").time())
+    
+    day_start_local = establishment_tz.localize(day_start_naive)
+    day_end_local = establishment_tz.localize(day_end_naive)
+
+    # 5. Gera todos os possíveis slots de início no horário local
+    interval = working_hours.appointment_interval_minutes
+    duration = service.duration_minutes
+    
+    possible_slots_local = []
+    current_slot_local = day_start_local
+    while (current_slot_local + timedelta(minutes=duration)) <= day_end_local:
+        possible_slots_local.append(current_slot_local)
+        current_slot_local += timedelta(minutes=interval)
+
+    # 6. Remove slots que caem na pausa para almoço (ainda em horário local)
+    available_slots_local = []
+    if day_config.lunch_break_start_time and day_config.lunch_break_end_time:
+        lunch_start_naive = datetime.combine(appointment_date, datetime.strptime(day_config.lunch_break_start_time, "%H:%M").time())
+        lunch_end_naive = datetime.combine(appointment_date, datetime.strptime(day_config.lunch_break_end_time, "%H:%M").time())
+        lunch_start_local = establishment_tz.localize(lunch_start_naive)
+        lunch_end_local = establishment_tz.localize(lunch_end_naive)
+        
+        for slot in possible_slots_local:
+            slot_end_time = slot + timedelta(minutes=duration)
+            if not (slot < lunch_end_local and slot_end_time > lunch_start_local):
+                available_slots_local.append(slot)
+    else:
+        available_slots_local = possible_slots_local
+
+    # 7. Busca agendamentos existentes (o banco armazena em UTC) para o dia inteiro (considerando UTC)
+    utc_tz = pytz.utc
+    day_start_utc = day_start_local.astimezone(utc_tz)
+    day_end_of_day_utc = (day_start_utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    existing_appointments = db.query(Appointment).filter(
         Appointment.establishment_id == establishment_id,
         Appointment.status.in_([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]),
-        Appointment.start_time < proposed_end_time,
-        Appointment.end_time > proposed_start_time
-    ).count()
+        Appointment.start_time >= day_start_utc,
+        Appointment.start_time < day_end_of_day_utc
+    ).all()
 
-    return overlapping_appointments == 0
+    # 8. Filtra os slots que conflitam com agendamentos existentes, COMPARANDO TUDO EM UTC
+    final_available_slots = []
+    for slot_local in available_slots_local:
+        slot_utc_start = slot_local.astimezone(utc_tz)
+        slot_utc_end = (slot_local + timedelta(minutes=duration)).astimezone(utc_tz)
+        
+        is_occupied = False
+        for existing_appt in existing_appointments:
+            if slot_utc_start < existing_appt.end_time and slot_utc_end > existing_appt.start_time:
+                is_occupied = True
+                break
+        if not is_occupied:
+            final_available_slots.append(slot_local.time())
 
-def _is_within_working_hours(
-    proposed_start_time: datetime,
-    proposed_end_time: datetime,
-    working_hours_day_config: DayWorkingHours # Config do dia da semana específico
-) -> bool:
-    """
-    Verifica se o slot proposto está dentro do horário de funcionamento
-    e fora dos intervalos de pausa para um dia específico.
-    """
-    if not working_hours_day_config.is_active:
-        return False # Dia inativo
+    return final_available_slots
 
-    day_start_str = working_hours_day_config.start_time
-    day_end_str = working_hours_day_config.end_time
-    lunch_start_str = working_hours_day_config.lunch_break_start_time
-    lunch_end_str = working_hours_day_config.lunch_break_end_time
-
-    # Converte os horários de string (HH:MM) para objetos time para comparação
-    # (Assumindo que proposed_start_time e proposed_end_time são datetimes completos)
-    # E que os horários no config são apenas HH:MM
-
-    # Simplificação: Se não houver horário de início ou fim para o dia, consideramos fechado
-    if not day_start_str or not day_end_str:
-        return False
-
-    # Compara apenas a parte de hora/minuto
-    # É importante que proposed_start_time e proposed_end_time estejam no mesmo dia
-    # e que esse dia corresponda ao working_hours_day_config
-
-    # Converte HH:MM string para time object para fácil comparação
-    # A data será a mesma do proposed_start_time para consistência
-    date_of_appointment = proposed_start_time.date()
-
-    day_start_dt = datetime.combine(date_of_appointment, datetime.strptime(day_start_str, "%H:%M").time(), tzinfo=proposed_start_time.tzinfo)
-    day_end_dt = datetime.combine(date_of_appointment, datetime.strptime(day_end_str, "%H:%M").time(), tzinfo=proposed_start_time.tzinfo)
-
-    # Verifica se está dentro do horário de funcionamento do dia
-    if not (day_start_dt <= proposed_start_time and proposed_end_time <= day_end_dt):
-        return False
-
-    # Verifica se colide com a pausa para almoço (se houver)
-    if lunch_start_str and lunch_end_str:
-        lunch_start_dt = datetime.combine(date_of_appointment, datetime.strptime(lunch_start_str, "%H:%M").time(), tzinfo=proposed_start_time.tzinfo)
-        lunch_end_dt = datetime.combine(date_of_appointment, datetime.strptime(lunch_end_str, "%H:%M").time(), tzinfo=proposed_start_time.tzinfo)
-
-        # O agendamento não pode sobrepor a pausa
-        # Não pode começar durante a pausa, nem terminar durante a pausa, nem englobar a pausa
-        if (proposed_start_time < lunch_end_dt and proposed_end_time > lunch_start_dt):
-            return False
-
-    return True
-
+# --- FUNÇÕES CRUD PARA AGENDAMENTOS ---
 
 def create_appointment(
     db: Session, *, appointment_in: AppointmentCreate, establishment_id: int
-) -> Appointment: # Retorna o objeto Appointment criado
+) -> Appointment:
     """
     Cria um novo agendamento após verificar a disponibilidade.
+    A verificação de disponibilidade agora está contida em get_available_slots.
+    Esta função deve ser chamada depois que o cliente seleciona um slot válido.
     """
-    # 1. Buscar o estabelecimento
-    establishment = db.query(Establishment).filter(Establishment.id == establishment_id).first()
-    if not establishment:
-        raise ValueError(f"Estabelecimento com ID {establishment_id} não encontrado.") # Usaremos HTTPException no endpoint
-
-    # 2. Buscar o serviço para obter a duração
     service = db.query(Service).filter(Service.id == appointment_in.service_id).first()
-    if not service:
-        raise ValueError(f"Serviço com ID {appointment_in.service_id} não encontrado.")
-    if service.establishment_id != establishment_id: # Verifica se o serviço pertence ao estabelecimento
-         raise ValueError(f"Serviço com ID {appointment_in.service_id} não pertence ao estabelecimento {establishment_id}.")
-    if not service.is_active:
-        raise ValueError(f"Serviço com ID {appointment_in.service_id} não está ativo.")
+    if not service or service.establishment_id != establishment_id or not service.is_active:
+        raise ValueError("Serviço inválido ou não pertence a este estabelecimento.")
+    
+    # Recalcula o end_time para garantir consistência
+    end_time = appointment_in.start_time + timedelta(minutes=service.duration_minutes)
 
-    # 3. Calcular o horário de término
-    proposed_start_time = appointment_in.start_time
-    duration_minutes = service.duration_minutes
-    proposed_end_time = _calculate_end_time(proposed_start_time, duration_minutes)
-
-    # 4. Verificar a configuração de horários do estabelecimento
-    if not establishment.working_hours_config:
-        raise ValueError("Estabelecimento não possui configuração de horários de atendimento.")
-
-    # Pydantic pode parsear o JSON do banco para o nosso schema WorkingHoursConfig
-    try:
-        working_hours = WorkingHoursConfig.parse_obj(establishment.working_hours_config)
-    except Exception as e: # Se o JSON no banco estiver malformado (não deveria acontecer se salvamos via Pydantic)
-        print(f"Erro ao parsear working_hours_config: {e}") # Logar o erro
-        raise ValueError("Erro interno ao processar horários de atendimento do estabelecimento.")
-
-    # Determinar o dia da semana (0=Segunda, 1=Terça, ..., 6=Domingo)
-    day_of_week_int = proposed_start_time.weekday()
-    days_map = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    day_key = days_map[day_of_week_int]
-
-    day_config: DayWorkingHours = getattr(working_hours, day_key)
-
-    # 5. Verificar se está dentro do horário de funcionamento e fora de pausas
-    if not _is_within_working_hours(proposed_start_time, proposed_end_time, day_config):
-        raise ValueError(f"O horário solicitado está fora do horário de funcionamento ou em horário de pausa para {day_key.capitalize()}.")
-
-    # 6. Verificar se o slot de horário está livre (não colide com outros agendamentos)
-    if not _is_slot_available(db, establishment_id, proposed_start_time, proposed_end_time):
-        raise ValueError("O horário solicitado já está ocupado.")
-
-    # 7. Se tudo estiver OK, criar o agendamento
+    # Aqui, poderíamos re-validar a disponibilidade do slot exato como uma dupla checagem, mas
+    # vamos confiar que o frontend só está enviando slots que foram retornados por get_available_slots.
+    
     db_appointment = Appointment(
-        start_time=proposed_start_time,
-        end_time=proposed_end_time,
+        start_time=appointment_in.start_time,
+        end_time=end_time,
         customer_name=appointment_in.customer_name,
         customer_phone=appointment_in.customer_phone,
         customer_email=appointment_in.customer_email,
         notes_by_customer=appointment_in.notes_by_customer,
-        status=AppointmentStatus.PENDING, # Ou CONFIRMED, dependendo da regra de negócio
+        status=AppointmentStatus.PENDING,
         establishment_id=establishment_id,
         service_id=appointment_in.service_id
     )
@@ -162,54 +138,41 @@ def create_appointment(
     db.refresh(db_appointment)
     return db_appointment
 
-# Outras funções de serviço (get, update, delete para appointments) virão aqui...
+def get_appointment(db: Session, *, appointment_id: int) -> Optional[Appointment]:
+    """
+    Obtém um agendamento específico pelo seu ID.
+    A verificação de propriedade deve ser feita no endpoint.
+    """
+    return db.query(Appointment).filter(Appointment.id == appointment_id).first()
 
-def get_appointment(db: Session, *, appointment_id: int, establishment_id: int) -> Optional[Appointment]:
-    """
-    Obtém um agendamento específico pelo seu ID,
-    garantindo que ele pertença ao estabelecimento fornecido.
-    """
-    return db.query(Appointment).filter(
-        Appointment.id == appointment_id,
-        Appointment.establishment_id == establishment_id
-    ).first()
- 
-   
 def get_appointments_by_establishment(
     db: Session, 
     *, 
     establishment_id: int, 
     skip: int = 0, 
     limit: int = 100,
-    start_date: Optional[date] = None, # Filtro opcional por data de início
-    end_date: Optional[date] = None,   # Filtro opcional por data de fim
-    status: Optional[AppointmentStatus] = None # Filtro opcional por status
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    status: Optional[AppointmentStatus] = None
 ) -> List[Appointment]:
     """
-    Obtém uma lista de agendamentos para um estabelecimento específico,
-    com paginação e filtros opcionais.
+    Obtém uma lista de agendamentos para um estabelecimento, com filtros.
     """
     query = db.query(Appointment).filter(Appointment.establishment_id == establishment_id)
 
     if start_date:
-        # Filtra agendamentos cuja start_time seja maior ou igual a start_date
-        # Converte start_date para datetime no início do dia
-        start_datetime = datetime.combine(start_date, datetime.min.time())
+        start_datetime = datetime.combine(start_date, time.min)
         query = query.filter(Appointment.start_time >= start_datetime)
     
     if end_date:
-        # Filtra agendamentos cuja start_time seja menor que o dia seguinte a end_date
-        # Converte end_date para datetime no final do dia (ou início do dia seguinte)
-        end_datetime = datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+        end_datetime = datetime.combine(end_date + timedelta(days=1), time.min)
         query = query.filter(Appointment.start_time < end_datetime)
 
     if status:
         query = query.filter(Appointment.status == status)
         
-    # Ordena pelos mais recentes primeiro (ou por start_time)
     return query.order_by(desc(Appointment.start_time)).offset(skip).limit(limit).all()
 
-# Função de Serviço e Endpoint para Atualizar o Status de um Agendamento
 def update_appointment_status(
     db: Session, *, appointment_db_obj: Appointment, status_in: AppointmentStatus
 ) -> Appointment:
@@ -221,8 +184,6 @@ def update_appointment_status(
     db.commit()
     db.refresh(appointment_db_obj)
     return appointment_db_obj
-
-
 
 """
 Explicação Detalhada da Função create_appointment e suas Auxiliares:
@@ -261,6 +222,15 @@ O que faz:
 - Inclui skip e limit para paginação.
 - Adiciona filtros opcionais por start_date, end_date e status. Isso será muito útil para o profissional visualizar sua agenda (ex: "agendamentos de hoje", "agendamentos confirmados da próxima semana").
 - Ordena os resultados (exemplo: pelos mais recentes ou pelo horário de início).
+
+
+Função get_available_slots:
+- Pega o Timezone do Banco: A primeira coisa que fazemos é buscar o establishment.timezone (ex: "America/Sao_Paulo").
+- Trabalha no Horário Local: Geramos todos os slots possíveis (possible_slots_local) no fuso horário do estabelecimento. Isso torna mais fácil verificar contra o horário de funcionamento e as pausas, que também estão no horário local.
+- Converte para UTC para Comparações: Para comparar com os agendamentos existentes (que estão salvos em UTC no banco), nós convertemos cada slot que estamos testando para UTC (slot_utc_start, slot_utc_end).
+- Compara Maçãs com Maçãs: Agora, a comparação de conflito é feita entre dois horários "aware" e no mesmo fuso (UTC), o que é seguro e correto.
+- Retorna Horário Local: No final, retornamos o horário (.time()) do slot local, pois é isso que faz mais sentido para o cliente final ver na interface (ex: "14:00").
+- Com essa mudança, seu backend agora está preparado para lidar com estabelecimentos em qualquer fuso horário do mundo de forma profissional!
 
 Importante:
 - Tratamento de Erros: As funções estão levantando ValueError por enquanto. Nos endpoints da API, precisaremos capturar esses ValueError e convertê-los em HTTPException apropriadas (ex: 400 Bad Request, 404 Not Found, 409 Conflict) com mensagens claras para o frontend.

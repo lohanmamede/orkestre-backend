@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from datetime import date # Para os filtros de data
+from datetime import date, time # Para os filtros de data
 
 from app.api import deps
 from app.models.user_model import User
@@ -151,6 +151,32 @@ def update_appointment_status_endpoint(
     )
     return updated_appointment
 
+@router.get("/establishments/{establishment_id}/services/{service_id}/available-slots", response_model=List[time])
+def get_available_appointment_slots(
+    *,
+    db: Session = Depends(deps.get_db),
+    establishment_id: int,
+    service_id: int,
+    appointment_date: date # Recebe a data como parâmetro de query (ex: ?date=2025-06-10)
+):
+    """
+    Retorna uma lista de horários de início disponíveis para um serviço em uma data específica.
+    """
+    try:
+        available_slots = appointment_service.get_available_slots(
+            db=db,
+            establishment_id=establishment_id,
+            service_id=service_id,
+            appointment_date=appointment_date
+        )
+        return available_slots
+    except Exception as e:
+        # Este erro pode acontecer se, por exemplo, o serviço não pertence ao estabelecimento
+        # A lógica no serviço já pode levantar um ValueError.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
 
 """
 Explicação dos Endpoints:

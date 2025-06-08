@@ -13,6 +13,7 @@ from app.db.base_class import Base
 class Establishment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
+    timezone = Column(String, default="America/Sao_Paulo", nullable=False) # NOVO CAMPO
     phone_number = Column(String, nullable=True)
     
     """

@@ -38,6 +38,7 @@ class Establishment(BaseSchema):
     id: int
     name: str
     phone_number: Optional[str] = None
+    timezone: str
     # Adicionamos working_hours_config: Optional[WorkingHoursConfig] = None aos schemas. Isso significa que o campo é opcional e, se fornecido, deve seguir a estrutura definida em WorkingHoursConfig.
     working_hours_config: Optional[WorkingHoursConfig] = None # ADICIONADO AQUI
     user_id: int
