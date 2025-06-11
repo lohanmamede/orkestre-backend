@@ -134,7 +134,7 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 - **Terminal 2 - Worker de Tarefas:**
 ```bash
-rq worker --url redis://localhost:6379/0
+python worker.py
 
 - **Terminal 3 - Agendador de Lembretes:**
 ```bash
