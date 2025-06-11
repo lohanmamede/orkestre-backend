@@ -31,6 +31,8 @@ class Appointment(Base):
     notes_by_establishment = Column(Text, nullable=True) # Observações internas do estabelecimento
     status = Column(SAEnum(AppointmentStatus), nullable=False, default=AppointmentStatus.PENDING, index=True)
 
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
     # Chaves Estrangeiras e Relacionamentos
     establishment_id = Column(Integer, ForeignKey("establishments.id"), nullable=False)
     establishment = relationship("Establishment") # Relacionamento simples, sem back_populates por enquanto se não for estritamente necessário no Establishment
