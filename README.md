@@ -126,11 +126,19 @@ Isso iniciará:
 
 ### 5. Execute a Aplicação
 
+Você precisará de **três terminais** abertos na pasta do projeto, cada um com o ambiente virtual ativado.
+
+- **Terminal 1 - Servidor da API:**
 ```bash
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
 
-A API estará disponível em: `http://localhost:8000`
+- **Terminal 2 - Worker de Tarefas:**
+```bash
+rq worker --url redis://localhost:6379/0
+
+- **Terminal 3 - Agendador de Lembretes:**
+```bash
+python scheduler.py
 
 ## 📚 Documentação da API
 
