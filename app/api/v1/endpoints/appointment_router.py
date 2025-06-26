@@ -5,16 +5,18 @@ from datetime import date, time # Para os filtros de data
 
 from app.api import deps
 from app.models.user_model import User
-from app.schemas.appointment_schema import Appointment, AppointmentCreate, AppointmentStatus, AppointmentStatusUpdate # Nossos schemas
+from app.schemas.appointment_schema import Appointment as AppointmentSchema, AppointmentCreate, AppointmentStatus, AppointmentStatusUpdate # Nossos schemas
 from app.services import appointment_service, establishment_service # Nossos serviços
-
 
 # Importa o modelo AppointmentModel para evitar conflito de nome com o schema Appointment
 from app.models.appointment_model import Appointment as AppointmentModel
 
+from app.services import status_validation_service # Novo import
+from app.services.status_validation_service import StatusTransitionError # Importa a exceção customizada
+
 router = APIRouter()
 
-@router.post("/establishments/{establishment_id}/appointments/", response_model=Appointment, status_code=status.HTTP_201_CREATED)
+@router.post("/establishments/{establishment_id}/appointments/", response_model=AppointmentSchema, status_code=status.HTTP_201_CREATED)
 def create_new_appointment(
     *,
     db: Session = Depends(deps.get_db),
@@ -46,7 +48,7 @@ def create_new_appointment(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ocorreu um erro ao processar sua solicitação.")
 
 
-@router.get("/establishments/{establishment_id}/appointments/", response_model=List[Appointment])
+@router.get("/establishments/{establishment_id}/appointments/", response_model=List[AppointmentSchema])
 def list_appointments_for_establishment(
     *,
     db: Session = Depends(deps.get_db),
@@ -85,7 +87,7 @@ def list_appointments_for_establishment(
     return appointments
 
 # Endpoints para GET específico, PUT (atualizar status), DELETE virão aqui...
-@router.get("/appointments/{appointment_id}", response_model=Appointment)
+@router.get("/appointments/{appointment_id}", response_model=AppointmentSchema)
 def read_specific_appointment(
     *,
     db: Session = Depends(deps.get_db),
@@ -117,36 +119,57 @@ def read_specific_appointment(
         )
     return db_appointment
 
-@router.patch("/appointments/{appointment_id}/status", response_model=Appointment)
+@router.patch("/appointments/{appointment_id}/status", response_model=AppointmentSchema)
 def update_appointment_status_endpoint(
     *,
     db: Session = Depends(deps.get_db),
     appointment_id: int,
     status_update: AppointmentStatusUpdate, # Recebe o novo status no corpo
-    current_user: User = Depends(deps.get_current_active_user)
+    current_user: User = Depends(deps.get_current_active_user) # Garante que o usuário está autenticado
 ):
     """
-    Atualiza o status de um agendamento.
-    Apenas o proprietário do estabelecimento pode atualizar.
+    Atualiza o status de um agendamento, com validação de regras de negócio.
+    Apenas o proprietário do estabelecimento pode realizar esta ação.
     """
-    # 1. Busca o agendamento pelo ID primeiro.
+    # 1. Busca o agendamento no banco de dados
     db_appointment = appointment_service.get_appointment(db, appointment_id=appointment_id)
-
+    
     if not db_appointment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agendamento não encontrado")
-
-    # 2. Verifica se o estabelecimento do agendamento pertence ao usuário logado.
-    #    (Aqui usamos o relacionamento que definimos no modelo SQLAlchemy)
-    if db_appointment.establishment.user_id != current_user.id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="Não tem permissão para modificar este agendamento"
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Agendamento não encontrado"
         )
 
-    # 3. Se a permissão estiver OK, chama o serviço para atualizar o status.
+    # 2. Verifica a propriedade (Autorização)
+    # Garante que o usuário logado é o dono do estabelecimento ao qual o agendamento pertence.
+    if db_appointment.establishment.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Não tem permissão para modificar este agendamento"
+        )
+    
+    # 3. Valida a transição de status (Regras de Negócio)
+    # Chama nosso novo serviço de validação antes de qualquer alteração.
+    try:
+        # CORRETO:
+        status_validation_service.validate_status_transition( 
+            appointment=db_appointment, 
+            new_status=status_update.status
+        )
+    except StatusTransitionError as e:
+        # Se o serviço de validação levantar um erro de regra, retorna um erro 400.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+    # 4. Se todas as validações e autorizações passaram, atualiza o status
     updated_appointment = appointment_service.update_appointment_status(
-        db=db, appointment_db_obj=db_appointment, status_in=status_update.status
+        db=db, 
+        appointment_db_obj=db_appointment, 
+        status_in=status_update.status
     )
+    
     return updated_appointment
 
 @router.get("/establishments/{establishment_id}/services/{service_id}/available-slots", response_model=List[time])

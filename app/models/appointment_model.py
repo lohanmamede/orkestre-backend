@@ -9,10 +9,12 @@ from app.db.base_class import Base # Importe a classe Base
 class AppointmentStatus(str, enum.Enum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
+    IN_PROGRESS = "in_progress"  # NOVO STATUS
     CANCELLED_BY_CLIENT = "cancelled_by_client"
     CANCELLED_BY_ESTABLISHMENT = "cancelled_by_establishment"
     COMPLETED = "completed"
     NO_SHOW = "no_show"
+    RESCHEDULED = "rescheduled"  # NOVO STATUS
 
 class Appointment(Base):
     # __tablename__ será 'appointments'
