@@ -1,36 +1,35 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
-from sqlalchemy.sql import func
+## app/models/establishment_model.py
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.db.base_class import Base
-
-# No topo de app/models/establishment_model.py
-# from .service_model import Service # Ou use a string "Service" no relationship
-#Importe Service no topo (cuidado com importação circular - talvez seja melhor usar string): Porém, para relationship, é comum usar a string com o nome da classe se houver risco de importação circular ou se o modelo ainda não foi definido quando o Python lê o arquivo. Mas como Service estará em seu próprio arquivo, podemos tentar o import direto. Se der erro de importação circular, usaremos a string.
-
-
+from app.models.user_establishment_link import user_establishment_link
 
 class Establishment(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, nullable=False)
-    timezone = Column(String, default="America/Sao_Paulo", nullable=False) # NOVO CAMPO
-    phone_number = Column(String, nullable=True)
-    
-    """
-    Usamos JSON para armazenar uma estrutura de dados flexível.
-    nullable=True significa que um estabelecimento pode ser criado inicialmente sem uma configuração de horários (podemos definir um padrão na lógica da aplicação ou deixar que o usuário configure depois).
-    """
-    working_hours_config = Column(JSON, nullable=True) # Para guardar config de horários
-
-    user_id = Column(Integer, ForeignKey("users.id")) # Chave estrangeira para users.id
-    user = relationship("User", back_populates="establishment") # Relacionamento de volta para User
+    phone_number = Column(String(20), nullable=True) # <<<--- CAMPO ADICIONADO DE VOLTA
+    timezone = Column(String, default="America/Sao_Paulo", nullable=False)
+    # Adicionando outros campos que planejamos para o "website"
+    logo_url = Column(String, nullable=True)
+    banner_image_url = Column(String, nullable=True)
+    display_address = Column(String, nullable=True)
+    about_text = Column(Text, nullable=True)
+    social_links = Column(JSON, nullable=True)
+    working_hours_config = Column(JSON, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
-    # Relacionamento com os serviços deste estabelecimento
-    services = relationship(
-        "Service", # Nome da Classe do modelo relacionado
-        back_populates="establishment", # Nome do atributo no modelo Service que aponta de volta
-        cascade="all, delete-orphan" # Se um estabelecimento for deletado, seus serviços também serão
+    # REMOVIDO: a chave estrangeira 'user_id' e o relacionamento 'user'
+    # ADICIONADO: o relacionamento muitos-para-muitos 'users'
+    users = relationship(
+        "User",
+        secondary=user_establishment_link,
+        back_populates="establishments"
     )
+
+    # Relacionamentos 1:N
+    services = relationship("Service", back_populates="establishment", cascade="all, delete-orphan")
+    appointments = relationship("Appointment", back_populates="establishment", cascade="all, delete-orphan")

@@ -13,5 +13,7 @@ def init_db():
     from app.models.establishment_model import Establishment
     from app.models.service_model import Service
     from app.models.appointment_model import Appointment
+    from app.models.professional_model import Professional # NOVO
+    from app.models.user_establishment_link import user_establishment_link # NOVO
 
     Base.metadata.create_all(bind=engine)

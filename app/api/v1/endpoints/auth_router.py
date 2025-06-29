@@ -17,11 +17,12 @@ router = APIRouter()
 @router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
 def register_new_user(
     *,
-    db: Session = Depends(deps.get_db), # Injeta a sessão do banco
-    user_in: UserCreate # Espera dados no formato UserCreate
+    db: Session = Depends(deps.get_db),
+    user_in: UserCreate
 ):
     """
-    Cria um novo usuário (e seu estabelecimento associado, futuramente).
+    Cria um novo usuário.
+    O payload determina se ele cria um novo estabelecimento ou se junta a um existente.
     """
     user = user_service.get_user_by_email(db, email=user_in.email)
     if user:
@@ -30,14 +31,26 @@ def register_new_user(
             detail="Já existe um usuário com este email.",
         )
 
-    new_user = user_service.create_user(db=db, user_in=user_in)
-    # Aqui, futuramente, também criaríamos o Establishment associado ao new_user.id
+    # --- BLOCO TRY...EXCEPT ADICIONADO AQUI ---
+    try:
+        new_user = user_service.create_user(db=db, user_in=user_in)
+        # Futuramente, aqui também poderíamos enfileirar o e-mail de boas-vindas/verificação
+        return new_user
+    except ValueError as e:
+        # Captura os erros de lógica de negócio do nosso serviço
+        # (ex: "Código de convite inválido")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception:
+        # Captura qualquer outro erro inesperado para evitar um 500
+        # Em produção, logaríamos este erro detalhadamente
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Ocorreu um erro interno ao processar o registro."
+        )
 
-    return new_user
-
-# Dentro de app/api/v1/endpoints/auth_router.py, abaixo do endpoint de registro
-
-# Dentro de app/api/v1/endpoints/auth_router.py, abaixo do endpoint de registro
 
 @router.post("/login", response_model=Token)
 async def login_for_access_token( # Adicionei async, é uma boa prática para I/O com banco

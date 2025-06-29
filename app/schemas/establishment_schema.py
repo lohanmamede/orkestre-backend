@@ -1,46 +1,49 @@
-from pydantic import BaseModel
-from typing import Optional
-from datetime import datetime
-from .base_schema import BaseSchema # ou TunedModel se preferir
-from .working_hours_schema import WorkingHoursConfig
+# app/schemas/establishment_schema.py
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
+
+from .base_schema import BaseSchema
+from app.models.role_enum import Role
+
+# --- Schema para representar um membro na resposta da API ---
+class MemberSchema(BaseSchema):
+    id: int
+    email: EmailStr
+    role: Role
+
+# --- Schemas para o fluxo de CRUD do Estabelecimento ---
 
 class EstablishmentBase(BaseModel):
     name: str
     phone_number: Optional[str] = None
-    working_hours_config: Optional[WorkingHoursConfig] = None
+    timezone: Optional[str] = "America/Sao_Paulo"
+    display_address: Optional[str] = None
+    about_text: Optional[str] = None
+    # Adicione aqui outros campos que o dono possa editar no seu perfil de estabelecimento
 
-# Schema para criar um novo Establishment
-class EstablishmentCreate(EstablishmentBase):
-    # Se working_hours_config é opcional na criação, pode ser None
-    # Se quisermos que seja obrigatório na criação, removemos o Optional aqui
-    # ou definimos um valor default no Pydantic/modelo se aplicável.
-    # Por agora, vamos manter opcional na criação.
-    pass
-
-# Schema para atualizar um Establishment (adicionaremos depois, similar ao ServiceUpdate)
-class EstablishmentUpdate(BaseModel):
+class EstablishmentUpdate(EstablishmentBase):
+    # Para atualizar, todos os campos são opcionais
     name: Optional[str] = None
     phone_number: Optional[str] = None
-    working_hours_config: Optional[WorkingHoursConfig] = None
- 
+    timezone: Optional[str] = None
+    display_address: Optional[str] = None
+    about_text: Optional[str] = None
+    # Herdamos de EstablishmentBase, mas podemos redefinir para serem todos opcionais.
+    # Uma forma mais explícita:
+    # name: Optional[str] = None
+    # etc...
 
-class EstablishmentInDBBase(EstablishmentBase):
-    id: int
-    user_id: int
-    created_at: datetime
-    # updated_at: Optional[datetime]
+class CollaboratorCreate(BaseModel):
+    """Schema para o corpo da requisição ao adicionar um novo colaborador."""
+    email: EmailStr
 
-    class Config:
-        orm_mode = True
-
-# Schema para retornar um Establishment do banco de dados
+# --- Schema principal de resposta da API para Establishment ---
 class Establishment(BaseSchema):
     id: int
     name: str
     phone_number: Optional[str] = None
     timezone: str
-    # Adicionamos working_hours_config: Optional[WorkingHoursConfig] = None aos schemas. Isso significa que o campo é opcional e, se fornecido, deve seguir a estrutura definida em WorkingHoursConfig.
-    working_hours_config: Optional[WorkingHoursConfig] = None # ADICIONADO AQUI
-    user_id: int
-    created_at: datetime
-    # updated_at: Optional[datetime] # Se você tiver este campo
+    display_address: Optional[str] = None
+    about_text: Optional[str] = None
+
+    users: List[MemberSchema] = [] # A lista de membros com seus papéis
